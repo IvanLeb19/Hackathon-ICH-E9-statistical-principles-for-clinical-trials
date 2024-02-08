@@ -1,0 +1,335 @@
+---
+title: "Cтатистический отчет Исследование эффективности препарата Эргоферон"
+author: 'Лидия Карпович, Иван Лебедев, Ольга Потанина, Галина Чёрная '
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(TrialSize)
+library(epiR)
+library(gtsummary)
+library(BSDA)
+library(flextable)
+```
+
+# Расчёт размера выборки в КИ
+
+Гипотеза превосходства
+
+Исследование превосходства препарата гомеопатическим препарата Эргоферон над плацебо в лечении ОРВИ. Первичная конечная точка – время для облегчения всех симптомов ОРВИ в днях (с момента начала приёма препарата*). Из литературных данных известно, что на фоне лечения препаратом Эргоферон средняя длительность болезни составляет 4.5 ± 1.7 дней, в плацебо группе 5.2 ± 2.2. Границу превосходства предполагается установить равной 1 дню.
+
+*приём препарата начинается не позже 1 дня с момента развития симптомов заболевания
+
+H0: T-R >= d 
+Ha: T-R < d
+
+```{r}
+# Расчет минимального объема выборки разными пакетами
+
+TwoSampleMean.NIS(
+    alpha = 0.025,
+    beta = 0.2,
+    k = 1,
+    sigma = sqrt(0.5*(1.7^2 + 2.2^2)) %>% round(2), 
+    delta = 4.5 - 5.2,
+    margin = -1
+)
+
+epi.sssupc(
+    treat = 5.2,
+    control = 4.5,
+    sigma = sqrt(0.5*(1.7^2 + 2.2^2)) %>% round(2),
+    delta = 1,
+    alpha = 0.025,
+    power = 0.8,
+    n = NA,
+    r = 1
+)
+
+# Число пациентов в каждой группе с учетом 20% выбываемости
+
+round(677*100/80+1, digits = 0) 
+
+# Общее исло пациентов с учетом 20% выбываемости
+
+round((677*100/80+1)*2, digits = 0) 
+```
+
+# Открытие и проверка данных
+
+Повторяющихся строк, а также значимого количества пропущенных значений обнаружено не было
+
+```{r}
+df <- read.csv("team_3.csv", sep = ";", dec = ",") %>% 
+  mutate(
+    across(c(contains("_GRP"), contains("_GEN"), contains("_ECG"), contains("_ECG"), contains("_PHYS"), contains("_VIT")), ~ as.factor(.x))
+    )
+
+# Дубликаты
+any(duplicated(df))
+
+df %>% glimpse()
+
+# Количество пропущенных значений в датасете, если 0 не считать таковыми 
+
+df %>%
+  summarize_all(~sum(is.na(.)))
+
+# Количество пропущенных значений в датасете, если 0 считать таковыми
+
+df %>%
+  summarize_all(~sum(ifelse(. == 0, T, F)))
+```
+
+# Представление данных
+
+В таблице представлены описательные статистики 
+Для количественных переменных:
+  Количество наблюдений; 	
+	Среднее арифметическое; 	
+	95% доверительный интервал (ДИ) для среднего; 	
+	Стандартное отклонение;	
+	Медиана;
+	Межквартильный размах;
+	Минимальное значение;
+	Максимальное значение.
+Для порядковых и качественных показателей:
+	Абсолютная частота (количество наблюдений);
+	Относительная частота (в процентах).
+
+```{r}
+df %>% 
+  select(-ID) %>% 
+  tbl_summary(type = all_continuous() ~ "continuous2",
+              label = list(V0_GRP = "Группа",
+                           V0_DEM_GEN ~ "Пол", 
+                           V0_DEM_AGE ~ "Возраст",
+                           END_TIME ~ "Время_до_улучшения, дни",
+                           V1_CB_WBC ~ "Лейкоциты_Визит_1, х10^9/л",
+                           V1_CB_RBC ~ "Эритроциты_Визит_1, х10^9/л",
+                           V1_CB_HGB ~ "Гемоглобин_Визит_1, г/л",
+                           V1_CB_HCT ~ "Гематокрит_Визит_1", 
+                           V1_CB_PLT ~ "Тромбоциты_Визит_1,х10^9/л", 
+                           "V1_CB_NEUT." ~ "Нейтрофилы_Визит_1, х 10^9/л",
+                           "V1_CB_LYM." ~ "Лимфоциты_Визит_1, х 10^9/л",
+                           "V1_CB_MON." ~ "Моноциты_Визит_1, х 10^9/л",
+                           "V1_CB_EO." ~ "Эозинофилы_Визит_1, х 10^9/л",
+                           "V1_CB_BAS." ~ "Базофилы_Визит_1, х 10^9/л",
+                           V1_NORM_ECG ~ "Отклонения_ЭКГ_Визит_1",
+                           V1_NORM_PHYS ~ "Отклонения_Физ_осмотр_Визит_1",
+                           V1_NORM_VIT ~ "Отклонения_Вит_показатели_Визит_1",
+                           V2_CB_WBC ~ "Лейкоциты_Визит_2, х10^9/л",
+                           V2_CB_RBC ~ "Эритроциты_Визит_2, х10^9/л",
+                           V2_CB_HGB ~ "Гемоглобин_Визит_2, г/л",
+                           V2_CB_HCT ~ "Гематокрит_Визит_2", 
+                           V2_CB_PLT ~ "Тромбоциты_Визит_2,х10^9/л", 
+                           "V2_CB_NEUT." ~ "Нейтрофилы_Визит_2, х 10^9/л",
+                           "V2_CB_LYM." ~ "Лимфоциты_Визит_2, х 10^9/л",
+                           "V2_CB_MON." ~ "Моноциты_Визит_2, х 10^9/л",
+                           "V2_CB_EO." ~ "Эозинофилы_Визит_2, х 10^9/л",
+                           "V2_CB_BAS." ~ "Базофилы_Визит_2, х 10^9/л",
+                           V2_NORM_ECG ~ "Отклонения_ЭКГ_Визит_2",
+                           V2_NORM_PHYS ~ "Отклонения_Физ_осмотр_Визит_2",
+                           V2_NORM_VIT ~ "Отклонения_Вит_показатели_Визит_2"),
+              statistic = all_continuous() ~ c(
+                "{N_nonmiss}",
+                "{mean}",
+                "{sd}",
+                "{median}",
+                "{p25}-{p75}",
+                "{min}",
+                "{max}")
+              )
+```
+
+# Доверительные интервалы
+
+В таблице представлены 95% ДИ для среднего в случае количественных данных и 95% ДИ Уилсона для порядковых и качественных показателей.
+
+```{r}
+df %>% 
+  select(-ID) %>% 
+  tbl_summary(by = V0_GRP,
+              type = list(c("V1_CB_MON.", "V1_CB_EO.", "V1_CB_BAS.", "V2_CB_MON.", "V2_CB_EO.", "V2_CB_BAS.") ~ 'continuous'),
+              label = list(V0_DEM_GEN ~ "Пол", 
+                           V0_DEM_AGE ~ "Возраст",
+                           END_TIME ~ "Время_до_улучшения, дни",
+                           V1_CB_WBC ~ "Лейкоциты_Визит_1, х10^9/л",
+                           V1_CB_RBC ~ "Эритроциты_Визит_1, х10^9/л",
+                           V1_CB_HGB ~ "Гемоглобин_Визит_1, г/л",
+                           V1_CB_HCT ~ "Гематокрит_Визит_1", 
+                           V1_CB_PLT ~ "Тромбоциты_Визит_1,х10^9/л", 
+                           "V1_CB_NEUT." ~ "Нейтрофилы_Визит_1, х 10^9/л",
+                           "V1_CB_LYM." ~ "Лимфоциты_Визит_1, х 10^9/л",
+                           "V1_CB_MON." ~ "Моноциты_Визит_1, х 10^9/л",
+                           "V1_CB_EO." ~ "Эозинофилы_Визит_1, х 10^9/л",
+                           "V1_CB_BAS." ~ "Базофилы_Визит_1, х 10^9/л",
+                           V1_NORM_ECG ~ "Отклонения_ЭКГ_Визит_1",
+                           V1_NORM_PHYS ~ "Отклонения_Физ_осмотр_Визит_1",
+                           V1_NORM_VIT ~ "Отклонения_Вит_показатели_Визит_1",
+                           V2_CB_WBC ~ "Лейкоциты_Визит_2, х10^9/л",
+                           V2_CB_RBC ~ "Эритроциты_Визит_2, х10^9/л",
+                           V2_CB_HGB ~ "Гемоглобин_Визит_2, г/л",
+                           V2_CB_HCT ~ "Гематокрит_Визит_2", 
+                           V2_CB_PLT ~ "Тромбоциты_Визит_2,х10^9/л", 
+                           "V2_CB_NEUT." ~ "Нейтрофилы_Визит_2, х 10^9/л",
+                           "V2_CB_LYM." ~ "Лимфоциты_Визит_2, х 10^9/л",
+                           "V2_CB_MON." ~ "Моноциты_Визит_2, х 10^9/л",
+                           "V2_CB_EO." ~ "Эозинофилы_Визит_2, х 10^9/л",
+                           "V2_CB_BAS." ~ "Базофилы_Визит_2, х 10^9/л",
+                           V2_NORM_ECG ~ "Отклонения_ЭКГ_Визит_2",
+                           V2_NORM_PHYS ~ "Отклонения_Физ_осмотр_Визит_2",
+                           V2_NORM_VIT ~ "Отклонения_Вит_показатели_Визит_2"),
+              statistic = list(
+                all_continuous() ~ "{mean} ({sd})",
+                all_categorical() ~ "{n} / {N} ({p}%)"
+                 )) %>%
+  add_overall() %>% 
+  add_ci(
+    method = list(all_categorical() ~ "wilson", 
+                  all_continuous() ~ "t.test"),
+    include = everything(),
+    conf.level = 0.95)
+```
+
+# Cравнение базовых характеристик пациентов
+
+Значимых различий в базовых характеристиках между группами выявлено не было.
+
+```{r, message=FALSE}
+df %>% 
+  select(starts_with(c ("V0_", "V1_"))) %>% 
+  tbl_summary(
+    type = list(c("V1_CB_MON.", "V1_CB_EO.", "V1_CB_BAS.") ~ 'continuous'),
+    statistic = list(all_continuous() ~ "{mean} ({sd})"),
+    by = V0_GRP,
+    label = list(V0_DEM_GEN ~ "Пол", 
+                 V0_DEM_AGE ~ "Возраст",
+                 V1_CB_WBC ~ "Лейкоциты_Визит_1, х10^9/л",
+                 V1_CB_RBC ~ "Эритроциты_Визит_1, х10^9/л",
+                 V1_CB_HGB ~ "Гемоглобин_Визит_1, г/л",
+                 V1_CB_HCT ~ "Гематокрит_Визит_1", 
+                 V1_CB_PLT ~ "Тромбоциты_Визит_1,х10^9/л", 
+                 "V1_CB_NEUT." ~ "Нейтрофилы_Визит_1, х 10^9/л",
+                 "V1_CB_LYM." ~ "Лимфоциты_Визит_1, х 10^9/л",
+                 "V1_CB_MON." ~ "Моноциты_Визит_1, х 10^9/л",
+                 "V1_CB_EO." ~ "Эозинофилы_Визит_1, х 10^9/л",
+                 "V1_CB_BAS." ~ "Базофилы_Визит_1, х 10^9/л",
+                 V1_NORM_ECG ~ "Отклонения_ЭКГ_Визит_1",
+                 V1_NORM_PHYS ~ "Отклонения_Физ_осмотр_Визит_1",
+                 V1_NORM_VIT ~ "Отклонения_Вит_показатели_Визит_1")
+    )%>% 
+  add_p(list(all_continuous() ~ "t.test", 
+             all_categorical() ~ "chisq.test"))
+```
+
+# Анализ конечной точки
+
+Для проверки основной гипотезы исследования в качестве первичной конечной точки выбрано среднее время от появления симптомов ОРВИ (в днях) до улучшения состояния пациента.
+В ходе анализа конечной точки статистически значимых различий выявлено не было, H0 не отвергается, то есть на основании имеющихся данных мы не можем сделать вывод разлиции эффектов препарата Эргоферон и плацебо на время от появления симптомов ОРВИ (в днях) до улучшения состояния пациента.
+
+```{r}
+res <- z.test(df$END_TIME[df$V0_GRP == "Эргоферон"], df$END_TIME[df$V0_GRP == "Плацебо"], alternative = "two.sided", sigma.x=1.7, sigma.y=2.2)
+res <- broom::tidy(res)
+res %>% flextable()
+
+observed <- res$statistic
+
+# Создание последовательности значений x
+x_values <- seq(-4, 4, by = 0.01)
+
+# Расчет значений Плотности Вероятности (PDF) для стандартного нормального распределения
+pdf_normal <- dnorm(x_values, mean = 0, sd = 1)
+
+# Квантили
+quantiles <- c(0.025, 0.975)
+
+quantile_values <- qnorm(quantiles, mean = 0, sd = 1)
+
+# Создание данных для построения графика
+pdf_data <- data.frame(x = x_values, Probability = pdf_normal)
+
+# Создание графика PDF для визуализации стандартного нормального распределения
+ggplot(pdf_data, aes(x = x)) +
+  geom_line(aes(y = Probability), linewidth = 1, color = "black", linetype = "solid") +
+  geom_vline(xintercept = quantile_values, linewidth = 2, linetype = "solid", color = "blue") +
+  geom_vline(xintercept = observed, linewidth = 2, linetype = "dashed", color = "red") +
+  annotate("text", x = quantile_values[1]-0.15, y = 0.2, label = sprintf("Q(%.3f)=%.2f", quantiles[1], quantile_values[1]), hjust = 0, angle = 90) +
+  annotate("text", x = quantile_values[2]-0.15, y = 0.2, label = sprintf("Q(%.3f)=%.2f", quantiles[2], quantile_values[2]), hjust = 0, angle = 90) +
+  annotate("text", x = observed-0.15, y = 0.1, label = 'Наблюдаемая статистика', hjust = 0, angle = 90)+
+  labs(title = "PDF стандартного нормального распределения", x = "x", y = "Плотность вероятности") +
+  theme(panel.background = element_rect(fill = 'white', color = 'black'),
+        panel.grid.major = element_line(color = 'black', linetype = 'solid', linewidth = 0.1),
+        panel.grid.minor = element_line(color = 'black', linetype = 'solid', linewidth = 0.1),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())
+```
+
+# Оценка размера эффекта
+
+В ходе оценки эффективности препарата сделан вывод об отсутствии превосходящего эффекта препарата Эргоферон над плацебо, поскольку правая граница 95% ДИ не пересекла заданную границу превосходства в -1 день, то есть клинически значимый эффект отсутствует.
+
+```{r}
+res_data <- 
+  data_frame(x = rep(-0.1726494, length.out =5),
+             y = rep("Эргоферон-Плацебо", length.out =5))
+
+res_data %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_point(color = "blue",
+             size = 2) +
+  geom_errorbar(aes(xmin = -0.2037324, xmax = 0.1707454	)) +
+  geom_vline(xintercept = -1, linewidth = 2, linetype = "dashed", color = "red") +
+  annotate("text", x = -1.07, y = 0.75, label = 'Граница превосходства', hjust = 0, angle = 90)+
+  labs(title = "Оценка размера эффекта",
+       x = "Разница средних", y = "Эргоферон-Плацебо") +
+  theme(panel.background = element_rect(fill = 'white', color = 'black'),
+        panel.grid.major = element_line(color = 'black', linetype = 'solid', linewidth = 0.1),
+        panel.grid.minor = element_line(color = 'black', linetype = 'solid', linewidth = 0.1),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  scale_x_continuous(limits = c(-1.5, 1.5))
+```
+
+# Анализ безопасности
+
+# Количество НЯ* по группам:
+
+```{r}
+ df %>% 
+  mutate(across(c(contains("_NORM") & contains("V1")), ~ as.numeric(.x))) %>%
+  mutate(across(c(contains("_NORM") & contains("V2")), ~ as.numeric(.x))) %>%
+  mutate(sum_v1 = rowSums(select(., contains("NORM") & contains("V1"))),
+               sum_v2 = rowSums(select(., contains("NORM") & contains("V2")))) %>% 
+  select(., contains("sum"), V0_GRP) %>%
+  tbl_summary(
+    by = V0_GRP,
+    label = list(sum_v1 ~ "Количество НЯ на Визите 1",
+                 sum_v2 ~ "Количество НЯ на Визите 2")
+  )%>% 
+  add_p(
+    test = everything() ~ "chisq.test")
+```
+
+*Исследователями предоставлены данные по зарегистрированным НЯ по данным ЭКГ, витальных показателей, по данным осмотра. По данным лабораторных обследований НЯ не зарегистрировано. Серьезных нежелательных явлений зарегистрировано не было.
+
+```{r echo=FALSE}
+df %>% mutate(
+  AE_ECG = case_when(V1_NORM_ECG == 0 & V2_NORM_ECG != 0 ~ 1,
+                     TRUE ~ 0),
+  AE_PHYS = case_when(V1_NORM_PHYS == 0 & V2_NORM_PHYS != 0 ~ 1,
+                     TRUE ~ 0), 
+  AE_VIT = case_when(V1_NORM_VIT == 0 & V2_NORM_VIT != 0 ~ 1,
+                     TRUE ~ 0)) %>% select(., contains("AE"), V0_GRP) %>%
+  tbl_summary(
+    by = V0_GRP,
+    label = list(AE_ECG ~ "НЯ: отклонения по ЭКГ",
+              AE_PHYS ~ "НЯ: отклонения по данным осмотра",
+              AE_VIT ~ "НЯ: отклонения по данным витальных показателей")) %>% 
+  add_p(test = everything() ~ "chisq.test")
+```
